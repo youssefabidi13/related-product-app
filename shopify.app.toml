@@ -1,0 +1,24 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "e6c6fa82a0543d8fc66ddab135809d44"
+name = "related-products"
+handle = "related-products-29"
+application_url = "https://shopify.dev/apps/default-app-home"
+embedded = true
+
+[build]
+dev_store_url = "viseo-development-store.myshopify.com"
+include_config_on_deploy = true
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_products,write_products"
+
+[auth]
+redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+
+[webhooks]
+api_version = "2024-04"
+
+[pos]
+embedded = false
