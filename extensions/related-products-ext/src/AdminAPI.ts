@@ -64,7 +64,7 @@ export class AdminApi {
     }
   }
 
-  async getAllProducts(tag: string) {
+  async getAllProductsBasedOnTags(tag: string) {
     const result = await this.query<{
       products: {
         edges: {
@@ -111,7 +111,58 @@ export class AdminApi {
       throw new Error(JSON.stringify(result.errors));
     }
   }
-
+  async getAllProductsBasedOnCollections(collectionId: string) {
+    const result = await this.query<{
+      collection: {
+        id: string;
+        title: string;
+        products: {
+          edges: {
+            node: {
+              id: string;
+              title: string;
+              tags: string[];
+              collections: {
+                edges: {
+                  node: {
+                    id: string;
+                    title: string;
+                  };
+                }[];
+              };
+            };
+          }[];
+        };
+      };
+    }>(`query {
+      collection(id: "${collectionId}") {
+        id
+        title
+        products(first: 250) {
+          edges {
+            node {
+              id
+              title
+              tags
+              collections(first: 250) {
+                edges {
+                  node {
+                    id
+                    title
+                  }
+                }
+              }  
+            }
+          }
+        }
+      }
+    }`);
+    if (result.data) {
+      return result.data.collection.products.edges.map((edge) => edge.node);
+    } else {
+      throw new Error(JSON.stringify(result.errors));
+    }
+  }
   async checkIfMetafieldExist() {
     const result = await this.query<{
       metafieldDefinitions: {
@@ -137,7 +188,7 @@ export class AdminApi {
     }`);
 
     if (result.data) {
-      console.log("data : " + JSON.stringify(result));
+      // console.log("data : " + JSON.stringify(result));
       return result;
     } else {
       throw new Error("Failed to check if batch metafield exist");
@@ -179,7 +230,7 @@ export class AdminApi {
     );
 
     if (result.data) {
-      console.log("data : " + JSON.stringify(result));
+      // console.log("data : " + JSON.stringify(result));
       return result;
     } else {
       throw new Error("Failed to fetch SKUs");
@@ -219,7 +270,7 @@ export class AdminApi {
     );
 
     if (result.data) {
-      console.log("data : " + JSON.stringify(result));
+      // console.log("data : " + JSON.stringify(result));
       return result;
     } else {
       throw new Error("Failed to pin metafield");
@@ -228,7 +279,7 @@ export class AdminApi {
 
   async createRelatedProduct(
     ids: string[],
-    productId: string,
+    productId: string
     // metafieldId: string
   ) {
     const result = await this.query<{
@@ -241,7 +292,7 @@ export class AdminApi {
                 id: string;
                 value: string;
                 key: string;
-                namespace:string;
+                namespace: string;
               };
             }[];
           };
@@ -276,17 +327,17 @@ export class AdminApi {
           input: {
             id: productId,
             metafields: {
-              namespace:"custom",
+              namespace: "custom",
               value: JSON.stringify(ids),
-              key:"related_products_"
+              key: "related_products_",
               // id: metafieldId,
             },
           },
         },
       }
     );
-    console.log("result : " + JSON.stringify(result.data));
-    console.log("value :" + JSON.stringify(ids));
+    // console.log("result : " + JSON.stringify(result.data));
+    // console.log("value :" + JSON.stringify(ids));
     if (result.data) {
       return result.data;
     } else {
@@ -305,7 +356,7 @@ export class AdminApi {
           metafields: {
             edges: {
               node: {
-                id:string;
+                id: string;
                 value: string;
               };
             }[];
@@ -344,8 +395,8 @@ export class AdminApi {
         },
       }
     );
-    console.log("result if exist: " + JSON.stringify(result.data));
-    console.log("value :" + JSON.stringify(ids));
+    // console.log("result if exist: " + JSON.stringify(result.data));
+    // console.log("value :" + JSON.stringify(ids));
     if (result.data) {
       return result.data;
     } else {
@@ -357,9 +408,9 @@ export class AdminApi {
     const result = await this.query<{
       product: {
         id: string;
-        metafield:{
-          id:string | null;
-        }
+        metafield: {
+          id: string | null;
+        };
       };
     }>(`query {
       product(id: "${id}") {
@@ -375,4 +426,63 @@ export class AdminApi {
       throw new Error(JSON.stringify(result.errors));
     }
   }
+
+  async deleteProductformMetafieldRelatedProduct(
+    ids: string[],
+    productId: string,
+    metafieldId: string
+  ) {
+    const result = await this.query<{
+      productUpdate: {
+        product: {
+          id: string;
+          metafields: {
+            edges: {
+              node: {
+                id: string;
+                value: string;
+              };
+            }[];
+          };
+        };
+      };
+    }>(
+      `mutation productUpdate($input: ProductInput!) {
+    productUpdate(input: $input) {
+      product {
+        id
+        metafields(first: 250) {
+          edges {
+            node {
+              value
+              id
+            }
+          }
+        }
+      }
+      userErrors {
+        message
+        field
+      }
+    }
+  }`,
+      {
+        variables: {
+          input: {
+            id: productId,
+            metafields: {
+              value: JSON.stringify(ids),
+              id: metafieldId,
+            },
+          },
+        },
+      }
+    );
+    if (result.data) {
+      return result.data;
+    } else {
+      throw new Error(JSON.stringify(result.errors));
+    }
+  }
+
 }

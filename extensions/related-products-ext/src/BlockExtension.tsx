@@ -11,7 +11,6 @@ import {
 } from "@shopify/ui-extensions-react/admin";
 import { useEffect, useMemo, useState } from "react";
 import { AdminApi, Product } from "./AdminAPI";
-
 // The target used here must match the target used in the extension's toml file (./shopify.extension.toml)
 const TARGET = "admin.product-details.block.render";
 
@@ -21,11 +20,14 @@ function App() {
   // The useApi hook provides access to several useful APIs like i18n and data.
   const { data, query } = useApi(TARGET);
   const adminApi = useMemo(() => new AdminApi(query), []);
-  const [selectedChoice, setSelectedChoice] = useState<string[]>([]); // Track user selection as array of strings
   const [metafieldId, setMetafieldId] = useState("");
+  const [selectedChoice, setSelectedChoice] = useState<string[]>([]); // Track user selection as array of strings
   const [isLoading, setIsLoading] = useState(false);
   const [product, setProduct] = useState<Product>(null);
   const [relatedProductBasedOnTags, setRelatedProductBasedOnTags] = useState<
+    Product[]
+  >([]);
+  const [relatedProductBasedOnCollections, setRelatedProductBasedOnCollections] = useState<
     Product[]
   >([]);
   const [currentProductTags, setCurrentProductTags] = useState<string[]>([]);
@@ -74,7 +76,7 @@ function App() {
       const productCounts = {};
       for (const tag of product.tags) {
         try {
-          const productsWithTag = await adminApi.getAllProducts(tag);
+          const productsWithTag = await adminApi.getAllProductsBasedOnTags(tag);
 
           if (productsWithTag) {
             productsWithTag.map((p) => {
@@ -90,9 +92,9 @@ function App() {
           console.error("Error fetching related products:", error);
         }
       }
-      console.log("table : " + JSON.stringify(productCounts));
+      // console.log("table : " + JSON.stringify(productCounts));
       const uniqueCounts = Array.from(new Set(Object.values(productCounts)));
-      console.log("Unique counts:", uniqueCounts);
+      // console.log("Unique counts:", uniqueCounts);
       // Calculate the sum of unique counts
       const sum = uniqueCounts.reduce(
         (acc: number, count: number) => acc + count,
@@ -102,7 +104,7 @@ function App() {
       // Calculate the average
       const avg = sum / uniqueCounts.length;
 
-      console.log("Average:", avg);
+      // console.log("Average:", avg);
       // Deduplicate products by their id
       // const uniqueRelatedProducts = relatedProducts.filter(
       //   (product, index, self) =>
@@ -110,24 +112,80 @@ function App() {
       // );
 
       const uniqueRelatedProducts = relatedProducts
-        .filter((product) => productCounts[product.id] > avg)
+        .filter((product) => productCounts[product.id] > Math.floor(avg))
         .filter(
           (product, index, self) =>
             self.findIndex((p) => p.id === product.id) === index
         );
-
+        // console.log("uniqueRelatedProducts : " + JSON.stringify(uniqueRelatedProducts) );
       // Set the state variable relatedProductBasedOnTags
       setRelatedProductBasedOnTags(uniqueRelatedProducts);
+    }
+  };
+  const fetchRelatedProductBasedOnCollections = async () => {
+    if (product) {
+      const relatedProducts: Product[] = [];
+      const productCounts = {};
+      for (const collectionId of product.collections.edges.map((edge) => edge.node.id)) {
+        try {
+          const productsWithTag = await adminApi.getAllProductsBasedOnCollections(collectionId);
+          // console.log("productsWithTag collection : " + JSON.stringify(productsWithTag));  
+          if (productsWithTag) {
+            productsWithTag.map((p) => {
+              if (p.id !== product.id) {
+                relatedProducts.push(p);
+                productCounts[p.id] = productCounts[p.id]
+                  ? productCounts[p.id] + 1
+                  : 1;
+              }
+            });
+          }
+          // console.log("relatedProducts : " + JSON.stringify(relatedProducts));
+          // console.log("productCounts : " + JSON.stringify(productCounts));
+        } catch (error) {
+          console.error("Error fetching related products:", error);
+        }
+      }
+      // console.log("table collection : " + JSON.stringify(productCounts));
+      const uniqueCounts = Array.from(new Set(Object.values(productCounts)));
+      // console.log("Unique counts collection:", uniqueCounts);
+      // Calculate the sum of unique counts
+      const sum = uniqueCounts.reduce(
+        (acc: number, count: number) => acc + count,
+        0
+      ) as number;
+
+      // Calculate the average
+      const avg = sum / uniqueCounts.length;
+
+      // console.log("Average:", avg);
+      // Deduplicate products by their id
+      // const uniqueRelatedProducts = relatedProducts.filter(
+      //   (product, index, self) =>
+      //     self.findIndex((p) => p.id === product.id) === index
+      // );
+
+      const uniqueRelatedProducts = relatedProducts
+        .filter((product) => productCounts[product.id] > Math.floor(avg))
+        .filter(
+          (product, index, self) =>
+            self.findIndex((p) => p.id === product.id) === index
+        );
+      // console.log("uniqueRelatedProducts collection: " + JSON.stringify(uniqueRelatedProducts));
+      // Set the state variable relatedProductBasedOnTags
+      setRelatedProductBasedOnCollections(uniqueRelatedProducts);
     }
   };
 
   useEffect(() => {
     if (product) {
       fetchRelatedProductBasedOnTags();
+      fetchRelatedProductBasedOnCollections();
     }
   }, [product]);
 
   async function generateRelatedProduct() {
+    // console.log("id :" + JSON.stringify(data.selected[0].id) );
     setIsLoading(true);
     try {
       if (!checker) {
@@ -137,43 +195,70 @@ function App() {
         setMetafieldId(id);
 
         await adminApi.pinMetafield(id);
+        
       }
       if (product) {
-        const relatedProductIds = relatedProductBasedOnTags.map((p) => p.id);
 
+        const relatedProductIdsBasedOnCollection = relatedProductBasedOnCollections.map((p) => p.id);
+        const relatedProductIdsBasedOnTags = relatedProductBasedOnTags.map((p) => p.id);
+        const relatedProductIdsBasedOnTagsAndCollections = relatedProductIdsBasedOnCollection.filter((id) =>
+          relatedProductIdsBasedOnTags.includes(id)
+        );
         switch (selectedChoice.join(",")) {
           case "1":
             if (checkerMetafieldId) {
               await adminApi.createRelatedProductIfMetafieldExist(
-                relatedProductIds,
+                relatedProductIdsBasedOnTags,
                 data.selected[0].id,
                 metafieldId
               );
             } else {
               await adminApi.createRelatedProduct(
-                relatedProductIds,
+                relatedProductIdsBasedOnTags,
                 data.selected[0].id
               );
             }
             break;
           case "2":
-            console.log("choix 2");
+            if (checkerMetafieldId) {
+              await adminApi.createRelatedProductIfMetafieldExist(
+                relatedProductIdsBasedOnCollection,
+                data.selected[0].id,
+                metafieldId
+              );
+            } else {
+              await adminApi.createRelatedProduct(
+                relatedProductIdsBasedOnCollection,
+                data.selected[0].id
+              );
+            }
             break;
-          case "3":
-            console.log("choix 3");
-            break;
+          // case "3":
+          //   console.log("choix 3");
+          //   break;
           case "1,2":
-            console.log("choix 1 et 2");
+            if (checkerMetafieldId) {
+              await adminApi.createRelatedProductIfMetafieldExist(
+                relatedProductIdsBasedOnTagsAndCollections,
+                data.selected[0].id,
+                metafieldId
+              );
+            } else {
+              await adminApi.createRelatedProduct(
+                relatedProductIdsBasedOnTagsAndCollections,
+                data.selected[0].id
+              );
+            }
             break;
-          case "1,3":
-            console.log("choix 1 et 3");
-            break;
-          case "2,3":
-            console.log("choix 2 et 3");
-            break;
-          case "1,2,3":
-            console.log("choix 1 et 2 et 3");
-            break;
+          // case "1,3":
+          //   console.log("choix 1 et 3");
+          //   break;
+          // case "2,3":
+          //   console.log("choix 2 et 3");
+          //   break;
+          // case "1,2,3":
+          //   console.log("choix 1 et 2 et 3");
+          //   break;
           default:
             console.log("choix default");
             break;
@@ -205,7 +290,7 @@ function App() {
               choices={[
                 { label: "tags", id: "1" },
                 { label: "collections", id: "2" },
-                { label: "customer experience", id: "3" },
+                // { label: "customer experience", id: "3" },
               ]}
               onChange={handleChoiceChange}
             />

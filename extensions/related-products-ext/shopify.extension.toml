@@ -9,7 +9,15 @@ type = "ui_extension"
 module = "./src/BlockExtension.tsx"
 # The target used here must match the target used in the module file (./src/BlockExtension.tsx)
 target = "admin.product-details.block.render"
-
+[[extensions]]
+# Change the merchant-facing name of the extension in locales/en.default.json
+name = "handle-related-products"
+handle = "handle-related-products"
+type = "ui_extension"
+[[extensions.targeting]]
+module = "./src/DisplayRelatedProduct.tsx"
+# The target used here must match the target used in the module file (./src/ActionExtension.tsx)
+target = "admin.product-details.block.render"
 
 # Valid extension targets:
 # - admin.abandoned-checkout-details.block.render
